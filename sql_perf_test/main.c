@@ -1,25 +1,23 @@
-﻿#if defined _WIN64 || defined _WIN32
-#include <windows.h>
-#include <sql.h>
-#include <sqlext.h>
+﻿/*
+ * This code is based on https://blog.csdn.net/fuqiangnxn/article/details/94158465
+ */
 #include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#if defined _WIN64 || defined _WIN32
+#include <windows.h>
 #include <conio.h>
 #include <tchar.h>
-#include <stdlib.h>
 #include <sal.h>
-#include <pthread.h>
 #include "include/getopt.h"
 #else
 #include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/time.h>
-#include <pthread.h>
 #include <string.h>
+ //#include <gperftools/profiler.h>
+#endif
 #include <sql.h>
 #include <sqlext.h>
-//#include <gperftools/profiler.h>
-#endif
 
 /* 参数说明
 -t 客户端连接数量
@@ -57,16 +55,18 @@ typedef enum {
 static int g_connect_num = 0;   //客户端连接数量
 static int g_connect_failed = 0;    //客户端连接失败数量
 static int g_connect_success = 0;   //客户端连接成功数量
-static dmltype g_dmltype = dml_unknown;
-static bool g_isprepare = false;    //使用prepare方式与否
 static long g_commit_num = 0;   //多少条sql进行commit
 static long g_round_num = 0;    //每个客户端执行的SQL数量
-
 static long g_sql_missing = 0;  //执行sql未命中的总数量
-
 static long g_throughput = 0;   //吞吐量计算方式的一种
-
+static dmltype g_dmltype = dml_unknown;
+static bool g_isprepare = false;    //使用prepare方式与否
 SQLCHAR *g_dsn = NULL;
+
+/*
+ * gettimeofday() for windows: https://gist.github.com/ugovaretto/5875385
+ */
+#if defined (_WIN64) || defined (_WIN32)
 
 #if defined(_MSC_VER) || defined(_MSC_EXTENSIONS)
 #define DELTA_EPOCH_IN_MICROSECS  11644473600000000Ui64
@@ -114,6 +114,7 @@ static int gettimeofday(struct timeval* tv, struct timezone* tz)
 
     return 0;
 }
+#endif
 
 /* Get Current Time to microsecond */
 static double GetUTimeToDouble()
