@@ -52,6 +52,8 @@ typedef enum {
     dml_delete
 } dmltype;
 
+static int g_query_succ_num = 0;
+static int g_query_fail_num = 0;
 static int g_connect_num = 0;   //客户端连接数量
 static int g_connect_failed = 0;    //客户端连接失败数量
 static int g_connect_success = 0;   //客户端连接成功数量
@@ -285,7 +287,8 @@ static void* Workload(void* mPartitionID)
 
     time_start = GetUTimeToDouble();
     for (i = 0; i < g_round_num; i++) {
-        userid = i + partition_id * g_round_num;
+        //userid = i + partition_id * g_round_num;
+        userid = g_round_num % 7 + 1;
 
         if (g_isprepare) {
             rc = SQLExecute(hstmt);
@@ -304,7 +307,7 @@ static void* Workload(void* mPartitionID)
                 snprintf(strSql, 1000, "update t1 set cause = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbb',modifytime = '2018-11-12',version = 2 where id = %ld", userid);
                 break;
             case dml_select:
-                snprintf(strSql, 1000, "select * from t1 where id=%ld", userid);
+                snprintf(strSql, 1000, "select * from lineitem where l_linenumber=%ld", userid);
                 break;
             case dml_delete:
                 snprintf(strSql, 1000, "delete from t1 where id=%ld", userid);
@@ -325,22 +328,24 @@ static void* Workload(void* mPartitionID)
         if (g_dmltype == dml_select) {
             rc = SQLFetch(hstmt);
             if (rc == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) {
-                SQLBIGINT Value1 = 0;
-                SQLCHAR Value2[50];
-                memset(Value2, 0, sizeof(Value2));
-                SQLLEN  len1 = 1, len2 = 1;
-                rc = SQLGetData(hstmt, 1, SQL_C_SBIGINT, &Value1, 0, (SQLLEN*)&len1);
-                rc = SQLGetData(hstmt, 2, SQL_C_CHAR, Value2, sizeof(Value2), (SQLLEN*)&len2);
+                //SQLBIGINT Value1 = 0;
+                //SQLCHAR Value2[50];
+                //memset(Value2, 0, sizeof(Value2));
+                //SQLLEN  len1 = 1, len2 = 1;
+                //rc = SQLGetData(hstmt, 1, SQL_C_SBIGINT, &Value1, 0, (SQLLEN*)&len1);
+                //rc = SQLGetData(hstmt, 2, SQL_C_CHAR, Value2, sizeof(Value2), (SQLLEN*)&len2);
                 //printf("[%u] id:%ld results:value1:%ld,values2:%s,len1:%d,len2:%d\n",
                 //    tid, userid, (long)Value1, Value2, (int)len1, (int)len2);
+                g_query_succ_num++;
             } else {
+                g_query_fail_num++;
                 if (rc == SQL_NO_DATA) {
                     atomic_inc(&g_sql_missing, 1);
                 } else {
                     snprintf(errMsg, ERRMSG_LEN, "[%u] SELECT SQLFetch failed!\n", tid);
                     if (CheckError(rc, SQL_HANDLE_STMT, hstmt, (SQLCHAR*)errMsg)) {
                         goto exit;
-                    }
+                    }                    
                 }
             }
 
@@ -501,6 +506,9 @@ int main(int argc, char* argv[])
             printf("pthread_create %d failed ---\n", i);
             exit(EXIT_FAILURE);
         }
+    }
+
+    for (i = 0; i < g_connect_num; i++) {
         pthread_join(tid[i], NULL);
     }
 
